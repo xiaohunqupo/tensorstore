@@ -108,6 +108,10 @@ class MetadataMockHelper {
         "metadata.google.internal/computeMetadata/v1/"
         "instance/service-accounts/user@nowhere.com/token";
     if (absl::StartsWith(parsed.authority_and_path, kOAuthPath)) {
+      if (token_request_errors > 0) {
+        --token_request_errors;
+        return HttpResponse{503, absl::Cord("Service Unavailable")};
+      }
       return HttpResponse{
           200,
           absl::Cord(
@@ -128,6 +132,7 @@ class MetadataMockHelper {
     return HttpResponse{200, absl::Cord()};
   }
 
+  int token_request_errors = 0;
   GoogleAuthTestScope google_auth_test_scope;
 };
 
@@ -293,6 +298,42 @@ TEST(GcsKeyValueStoreTest, Retry) {
                     StatusIs(absl::StatusCode::kAborted));
       } else {
         bucket.TriggerErrors(max_retries - 2);
+        TENSORSTORE_EXPECT_OK(kvstore::Read(store, "x").result());
+      }
+    }
+  }
+}
+
+TEST(GcsKeyValueStoreTest, RetryAuth) {
+  for (int max_retries : {2, 3, 4}) {
+    for (bool fail : {false, true}) {
+      ABSL_LOG(INFO) << max_retries << (fail ? " fail" : " success");
+
+      auto mock_transport = std::make_shared<MyMockTransport>();
+      DefaultHttpTransportSetter mock_transport_setter{mock_transport};
+
+      GCSMockStorageBucket bucket("my-bucket");
+      mock_transport->buckets_.push_back(&bucket);
+
+      auto context = Context::Default();
+      TENSORSTORE_ASSERT_OK_AND_ASSIGN(
+          auto store, kvstore::Open({{"driver", kDriver},
+                                     {"bucket", "my-bucket"},
+                                     {"context",
+                                      {
+                                          {"gcs_request_retries",
+                                           {{"max_retries", max_retries},
+                                            {"initial_delay", "1ms"},
+                                            {"max_delay", "10ms"}}},
+                                      }}},
+                                    context)
+                          .result());
+      if (fail) {
+        mock_transport->metadata_mock_.token_request_errors = max_retries + 1;
+        EXPECT_THAT(kvstore::Read(store, "x").result(),
+                    StatusIs(absl::StatusCode::kAborted));
+      } else {
+        mock_transport->metadata_mock_.token_request_errors = max_retries - 2;
         TENSORSTORE_EXPECT_OK(kvstore::Read(store, "x").result());
       }
     }

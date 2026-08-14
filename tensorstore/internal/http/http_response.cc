@@ -205,7 +205,7 @@ absl::Status HttpResponseCodeToStatus(const HttpResponse& response,
   }
   StatusBuilder builder(code, loc);
   auto status_message = HttpResponseCodeToMessage(response);
-  if (status_message) {
+  if (!status_message) {
     status_message = "Unknown";
   }
   builder.Format("%s [HTTP code %d]", status_message, response.status_code);

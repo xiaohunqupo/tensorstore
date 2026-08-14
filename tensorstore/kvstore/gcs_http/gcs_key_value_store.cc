@@ -563,7 +563,13 @@ struct ReadTask : public RateLimiterNode,
     // TODO: Configure timeouts.
     auto maybe_auth_header = owner->GetAuthHeader();
     if (!maybe_auth_header.ok()) {
-      promise.SetResult(maybe_auth_header.status());
+      absl::Status status = maybe_auth_header.status();
+      if (IsRetriable(status)) {
+        status =
+            owner->BackoffForAttemptAsync(std::move(status), attempt_++, this);
+        if (status.ok()) return;
+      }
+      promise.SetResult(std::move(status));
       return;
     }
 
@@ -763,7 +769,13 @@ struct WriteTask : public RateLimiterNode,
 
     auto maybe_auth_header = owner->GetAuthHeader();
     if (!maybe_auth_header.ok()) {
-      promise.SetResult(maybe_auth_header.status());
+      absl::Status status = maybe_auth_header.status();
+      if (IsRetriable(status)) {
+        status =
+            owner->BackoffForAttemptAsync(std::move(status), attempt_++, this);
+        if (status.ok()) return;
+      }
+      promise.SetResult(std::move(status));
       return;
     }
     HttpRequestBuilder request_builder("POST", upload_url);
@@ -918,7 +930,13 @@ struct DeleteTask : public RateLimiterNode,
 
     auto maybe_auth_header = owner->GetAuthHeader();
     if (!maybe_auth_header.ok()) {
-      promise.SetResult(maybe_auth_header.status());
+      absl::Status status = maybe_auth_header.status();
+      if (IsRetriable(status)) {
+        status =
+            owner->BackoffForAttemptAsync(std::move(status), attempt_++, this);
+        if (status.ok()) return;
+      }
+      promise.SetResult(std::move(status));
       return;
     }
     HttpRequestBuilder request_builder("DELETE", delete_url);
@@ -1126,7 +1144,13 @@ struct ListTask : public RateLimiterNode,
 
     auto auth_header = owner_->GetAuthHeader();
     if (!auth_header.ok()) {
-      execution::set_error(receiver_, std::move(auth_header).status());
+      absl::Status status = std::move(auth_header).status();
+      if (IsRetriable(status)) {
+        status =
+            owner_->BackoffForAttemptAsync(std::move(status), attempt_++, this);
+        if (status.ok()) return;
+      }
+      execution::set_error(receiver_, std::move(status));
       execution::set_stopping(receiver_);
       return;
     }
