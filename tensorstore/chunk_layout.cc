@@ -490,8 +490,7 @@ ChunkLayout::ChunkAspectRatioBase GetChunkAspectRatio(const ChunkLayout& self,
       storage->chunk_aspect_ratio_hard_constraint_[usage_index]);
 }
 
-constexpr inline HardConstraintBit GetChunkElementsHardConstraintBit(
-    Usage usage) {
+constexpr HardConstraintBit GetChunkElementsHardConstraintBit(Usage usage) {
   return static_cast<HardConstraintBit>(
       static_cast<int>(HardConstraintBit::write_chunk_elements) +
       static_cast<int>(usage));
@@ -524,16 +523,16 @@ ChunkLayout::GridView GetGridConstraints(const ChunkLayout& self, Usage usage) {
 absl::Status SetInnerOrderInternal(ChunkLayout& self,
                                    ChunkLayout::InnerOrder value,
                                    StoragePtr& storage_to_be_destroyed) {
+  const DimensionIndex rank = value.size();
   if (!IsValidPermutation(value)) {
     return absl::InvalidArgumentError(
         absl::StrFormat("Invalid permutation: %v", GenericStringify(value)));
   }
-  const DimensionIndex rank = value.size();
   TENSORSTORE_RETURN_IF_ERROR(
       EnsureRank(self.storage_, rank, storage_to_be_destroyed));
   auto& impl = *self.storage_;
   DimensionIndex* inner_order = impl.inner_order();
-  if (inner_order[0] != -1) {
+  if (rank > 0 && inner_order[0] != -1) {
     if (!value.hard_constraint) return absl::OkStatus();
     if (IsHardConstraint(impl, HardConstraintBit::inner_order)) {
       if (!std::equal(value.data(), value.data() + rank, inner_order)) {

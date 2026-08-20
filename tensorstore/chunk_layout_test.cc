@@ -84,13 +84,24 @@ using ::testing::Optional;
 using Usage = ChunkLayout::Usage;
 
 TEST(ChunkLayoutTest, SingleLevelRank0) {
-  ChunkLayout layout;
-  TENSORSTORE_ASSERT_OK(layout.Set(tensorstore::RankConstraint(0)));
-  TENSORSTORE_ASSERT_OK(layout.Finalize());
-  ASSERT_EQ(0, layout.rank());
-  EXPECT_THAT(layout.inner_order(), ::testing::ElementsAre());
-  EXPECT_THAT(layout | tensorstore::IdentityTransform(0), Optional(layout));
-  EXPECT_THAT(layout.read_chunk().shape(), ::testing::ElementsAre());
+  {
+    ChunkLayout layout;
+    TENSORSTORE_ASSERT_OK(layout.Set(tensorstore::RankConstraint(0)));
+    TENSORSTORE_ASSERT_OK(layout.Finalize());
+    ASSERT_EQ(0, layout.rank());
+    EXPECT_THAT(layout.inner_order(), ::testing::ElementsAre());
+    EXPECT_THAT(layout | tensorstore::IdentityTransform(0), Optional(layout));
+    EXPECT_THAT(layout.read_chunk().shape(), ::testing::ElementsAre());
+  }
+
+  // Verify rank-0 inner_order constraint JSON parsing:
+  {
+    TENSORSTORE_ASSERT_OK_AND_ASSIGN(
+        auto layout,
+        ChunkLayout::FromJson({{"inner_order", ::nlohmann::json::array()}}));
+    EXPECT_EQ(0, layout.rank());
+    EXPECT_THAT(layout.inner_order(), ::testing::ElementsAre());
+  }
 }
 
 TEST(ChunkLayoutTest, SingleLevelRank1) {
